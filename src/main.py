@@ -1,5 +1,8 @@
 import asyncio
+import json
 import time
+
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
@@ -20,6 +23,7 @@ from contextlib import asynccontextmanager
 
 # Imports required by the service's model
 # TODO: 1. ADD REQUIRED IMPORTS (ALSO IN THE REQUIREMENTS.TXT)
+import requests
 
 settings = get_settings()
 
@@ -27,7 +31,7 @@ settings = get_settings()
 class MyService(Service):
     # TODO: 2. CHANGE THIS DESCRIPTION
     """
-    My service model
+    This service uses Hugging Face's model hub API to directly query image-to-text AI models
     """
 
     # Any additional fields must be excluded for Pydantic to work
@@ -37,20 +41,25 @@ class MyService(Service):
     def __init__(self):
         super().__init__(
             # TODO: 3. CHANGE THE SERVICE NAME AND SLUG
-            name="My Service",
-            slug="my-service",
+            name="Hugging Face image-to-text",
+            slug="hugging-face-image-to-text",
             url=settings.service_url,
             summary=api_summary,
             description=api_description,
             status=ServiceStatus.AVAILABLE,
-            # TODO: 4. CHANGE THE INPUT AND OUTPUT FIELDS, THE TAGS AND THE HAS_AI VARIABLE
             data_in_fields=[
                 FieldDescription(
-                    name="image",
+                    name="json_description",
                     type=[
-                        FieldDescriptionType.IMAGE_PNG,
-                        FieldDescriptionType.IMAGE_JPEG,
+                        FieldDescriptionType.APPLICATION_JSON
                     ],
+                ),
+                FieldDescription(
+                    name="input_image",
+                    type=[
+                        FieldDescriptionType.IMAGE_JPEG,
+                        FieldDescriptionType.IMAGE_PNG
+                    ]
                 ),
             ],
             data_out_fields=[
@@ -60,11 +69,11 @@ class MyService(Service):
             ],
             tags=[
                 ExecutionUnitTag(
-                    name=ExecutionUnitTagName.IMAGE_PROCESSING,
-                    acronym=ExecutionUnitTagAcronym.IMAGE_PROCESSING,
+                    name=ExecutionUnitTagName.IMAGE_RECOGNITION,
+                    acronym=ExecutionUnitTagAcronym.IMAGE_RECOGNITION,
                 ),
             ],
-            has_ai=False,
+            has_ai=True,
             # OPTIONAL: CHANGE THE DOCS URL TO YOUR SERVICE'S DOCS
             docs_url="https://docs.swiss-ai-center.ch/reference/core-concepts/service/",
         )
@@ -78,10 +87,48 @@ class MyService(Service):
         # raw = data["image"].data
         # input_type = data["image"].type
         # ... do something with the raw data
+        def is_valid_json(json_string):
+            try:
+                json.loads(json_string)
+                return True
+            except ValueError:
+                return False
 
-        # NOTE that the result must be a dictionary with the keys being the field names set in the data_out_fields
+        try:
+            json_description = json.loads(data['json_description'].data.decode('utf-8'))
+            api_token = json_description['api_token']
+            api_url = json_description['api_url']
+        except ValueError as err:
+            raise Exception(f"json_description is invalid: {str(err)}")
+        except KeyError as err:
+            raise Exception(f"api_url or api_token missing from json_description: {str(err)}")
+
+        headers = {"Authorization": f"Bearer {api_token}"}
+
+        def image_to_text_query(img_data):
+            response = requests.post(api_url, headers=headers, data=img_data)
+            return response
+
+        image_bytes = data['input_image'].data
+        result_data = image_to_text_query(image_bytes)
+
+        if is_valid_json(result_data.content):
+            data = json.loads(result_data.content)
+            if 'error' in data:
+                raise Exception(data['error'])
+        output = json.dumps(result_data.json(), indent=4)
+        if 'desired_output' in json_description:
+            desired_output = json_description['desired_output']
+            if isinstance(result_data.json(), list):
+                output_list = [{desired_output: data[desired_output]} for data in result_data.json() if desired_output
+                               in data]
+                output = json.dumps(output_list, indent=4)
+            else:
+                output = json.dumps({desired_output: result_data.json()[desired_output]})
+
         return {
-            "result": TaskData(data=..., type=FieldDescriptionType.APPLICATION_JSON)
+            "result": TaskData(data=output,
+                               type=FieldDescriptionType.APPLICATION_JSON)
         }
 
 
@@ -136,18 +183,37 @@ async def lifespan(app: FastAPI):
 
 
 # TODO: 6. CHANGE THE API DESCRIPTION AND SUMMARY
-api_description = """My service
-bla bla bla...
+api_description = """The service is used to query text-to-image AI models from the Hugging Face inference API.\n
+
+You can choose from any model available on the inference API from the [Hugging Face Hub](https://huggingface.co/models)
+that takes an image as input and outputs text(json).
+
+This service has two inputs:
+ - A json file that defines the model you want to use, your access token and the input/output types you expect.
+ - The image file used as input.
+ 
+json_description.json example:
+ ```
+ {
+     "api_token": "your_token",
+     "api_url": "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-base"
+}
+```
+This specific model "Salesforce/blip-image-captioning-base" is used for image captioning.
+
+The model may need some time to load on Hugging face's side, you may encounter an error on your first try.
+Helpful trick: The answer from the inference API is cached, so if you encounter a loading error try to change the
+input to check if the model is loaded.
 """
-api_summary = """My service
-bla bla bla...
+
+api_summary = """This service is used to query text-to-image models from Hugging Face 
 """
 
 # Define the FastAPI application with information
 # TODO: 7. CHANGE THE API TITLE, VERSION, CONTACT AND LICENSE
 app = FastAPI(
     lifespan=lifespan,
-    title="Sample Service API.",
+    title="Hugging Face image-to-text service",
     description=api_description,
     version="0.0.1",
     contact={
