@@ -116,6 +116,7 @@ class MyService(Service):
             data = json.loads(result_data.content)
             if 'error' in data:
                 raise Exception(data['error'])
+
         output = json.dumps(result_data.json(), indent=4)
         if 'desired_output' in json_description:
             desired_output = json_description['desired_output']
@@ -183,13 +184,14 @@ async def lifespan(app: FastAPI):
 
 
 # TODO: 6. CHANGE THE API DESCRIPTION AND SUMMARY
-api_description = """The service is used to query text-to-image AI models from the Hugging Face inference API.\n
+api_description = """The service is used to query image-to-text AI models from the Hugging Face inference API.\n
 
 You can choose from any model available on the inference API from the [Hugging Face Hub](https://huggingface.co/models)
 that takes an image as input and outputs text(json).
 
 This service has two inputs:
- - A json file that defines the model you want to use, your access token and the input/output types you expect.
+ - A json file that defines the model you want to use, your access token and optionally, you can set a specific field
+ from the json answer as the output. If you specify nothing, the whole json will be returned.
  - The image file used as input.
  
 json_description.json example:
@@ -197,6 +199,7 @@ json_description.json example:
  {
      "api_token": "your_token",
      "api_url": "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-base"
+     "desired_output" : "generated_text"
 }
 ```
 This specific model "Salesforce/blip-image-captioning-base" is used for image captioning.
@@ -206,7 +209,7 @@ Helpful trick: The answer from the inference API is cached, so if you encounter 
 input to check if the model is loaded.
 """
 
-api_summary = """This service is used to query text-to-image models from Hugging Face 
+api_summary = """This service is used to query image-to-text models from Hugging Face 
 """
 
 # Define the FastAPI application with information
