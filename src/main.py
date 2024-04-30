@@ -60,7 +60,8 @@ class MyService(Service):
             ],
             data_out_fields=[
                 FieldDescription(
-                    name="result", type=[FieldDescriptionType.APPLICATION_JSON]
+                    name="result", type=[FieldDescriptionType.APPLICATION_JSON,
+                                         FieldDescriptionType.TEXT_PLAIN]
                 ),
             ],
             tags=[
@@ -70,7 +71,7 @@ class MyService(Service):
                 ),
             ],
             has_ai=True,
-            docs_url="https://docs.swiss-ai-center.ch/reference/services/hugging-face-text-to-service/",
+            docs_url="https://docs.swiss-ai-center.ch/reference/services/hugging-face-image-to-text/",
         )
         self._logger = get_logger(settings)
 
@@ -111,9 +112,11 @@ class MyService(Service):
             if isinstance(result_data.json(), list):
                 output_list = [{desired_output: data[desired_output]} for data in result_data.json() if desired_output
                                in data]
-                output = json.dumps(output_list, indent=4)
+
+                # This list should contain only one element, the desired output field from the received JSON
+                output = output_list[0]
             else:
-                output = json.dumps({desired_output: result_data.json()[desired_output]})
+                output = result_data.json()[desired_output]
 
         return {
             "result": TaskData(data=output,
@@ -190,6 +193,11 @@ json_description.json example:
 }
 ```
 This specific model "Salesforce/blip-image-captioning-base" is used for image captioning.
+
+!!! note
+
+    If you don't specify a desired output, the service will return the whole JSON file (.json).
+    If you do specify an output, the response will be a text file containing the given field data.
 
 The model may need some time to load on Hugging face's side, you may encounter an error on your first try.
 Helpful trick: The answer from the inference API is cached, so if you encounter a loading error try to change the
