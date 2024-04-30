@@ -110,13 +110,18 @@ class MyService(Service):
         if 'desired_output' in json_description:
             desired_output = json_description['desired_output']
             if isinstance(result_data.json(), list):
-                output_list = [{desired_output: data[desired_output]} for data in result_data.json() if desired_output
+                output_list = [data[desired_output] for data in result_data.json() if desired_output
                                in data]
 
                 # This list should contain only one element, the desired output field from the received JSON
                 output = output_list[0]
             else:
                 output = result_data.json()[desired_output]
+
+            return {
+                "result": TaskData(data=output,
+                                   type=FieldDescriptionType.TEXT_PLAIN)
+            }
 
         return {
             "result": TaskData(data=output,
@@ -194,10 +199,9 @@ json_description.json example:
 ```
 This specific model "Salesforce/blip-image-captioning-base" is used for image captioning.
 
-!!! note
-
-    If you don't specify a desired output, the service will return the whole JSON file (.json).
-    If you do specify an output, the response will be a text file containing the given field data.
+**CAUTION** \n
+If you don't specify a desired output, the service will return the whole JSON file (.json).
+If you do specify an output, the response will be a text file containing the given field data.
 
 The model may need some time to load on Hugging face's side, you may encounter an error on your first try.
 Helpful trick: The answer from the inference API is cached, so if you encounter a loading error try to change the
