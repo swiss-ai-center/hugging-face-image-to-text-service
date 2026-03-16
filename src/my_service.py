@@ -7,6 +7,7 @@ from common_code.common.models import FieldDescription, ExecutionUnitTag
 from common_code.tasks.models import TaskData
 # Imports required by the service's model
 import requests
+import json
 
 settings = get_settings()
 
@@ -44,6 +45,7 @@ api_summary = """This service is used to query image-to-text models from Hugging
 
 api_title = "Hugging Face image-to-text service"
 version = "1.0.0"
+
 
 class MyService(Service):
     """
@@ -149,4 +151,3 @@ class MyService(Service):
             "result": TaskData(data=output,
                                type=FieldDescriptionType.APPLICATION_JSON)
         }
-
